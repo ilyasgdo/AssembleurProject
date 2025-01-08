@@ -30,6 +30,7 @@ NOL2D               EQU     0x00
 LED1                EQU     0x10
 
 
+
 DUREE            EQU     0x03FFFFF
 DUREE_90         EQU     0x800000
 DUREE_AVANCE_COURTE EQU     0x00440000 ; Durée pour avancer légèrement
@@ -38,13 +39,13 @@ DUREE_ONE               EQU     0x03FFFFF
 DUREE_90_ONE          EQU     0x800000
 DUREE_AVANCE_COURTE_ONE EQU     0x00440000 ; Durée pour avancer légèrement
 
-DUREE_TWO             EQU     0x0FFFFF
-DUREE_90_TWO          EQU     0x400000
-DUREE_AVANCE_COURTE_TWO EQU     0x00240000 ; Durée pour avancer légèrement
+DUREE_TWO             EQU     0x03FFFFF
+DUREE_90_TWO          EQU     0x800000
+DUREE_AVANCE_COURTE_TWO EQU     0x00440000 ; Durée pour avancer légèrement
 	
 DUREE_TRHEE              EQU     0x03FFFFF
-DUREE_90_TRHEE            EQU     0x100000
-DUREE_AVANCE_COURTE_TRHEE  EQU     0x0030000 ; Durée pour avancer légèrement
+DUREE_90_TRHEE            EQU     0x800000
+DUREE_AVANCE_COURTE_TRHEE  EQU     0x00440000 ; Durée pour avancer légèrement
 
 ; Constantes
 INCREMENT_CYCLE     EQU     0x00000FFF    ; Incrément de 10 secondes (valeur à ajuster)
@@ -116,14 +117,29 @@ delay_init
 		SUBS    R0, R0, #1
 		BNE     delay_init
 
-    ; Configuration des LED (Port F)
-		LDR     R6, =GPIO_PORTF_BASE + GPIO_O_DIR
-		LDR     R0, =PORT45
-		STR     R0, [R6]
-        ; Configuration des LED (Port F)
-        LDR     R6, =GPIO_PORTF_BASE + GPIO_O_DIR
-        LDR     R0, =PORT45
-        STR     R0, [R6]
+
+		ldr r6, = GPIO_PORTF_BASE+GPIO_O_DIR    ;; 1 Pin du portF en sortie (broche 4 : 00010000)
+        ldr r0, = PORT45 	
+        str r0, [r6]
+		
+        ldr r6, = GPIO_PORTF_BASE+GPIO_O_DEN	;; Enable Digital Function 
+        ldr r0, = PORT45 		
+        str r0, [r6]
+ 
+		ldr r6, = GPIO_PORTF_BASE+GPIO_O_DR2R	;; Choix de l'intensité de sortie (2mA)
+        ldr r0, = PORT45
+        str r0, [r6]
+
+              					;; pour eteindre LED
+     
+		; allumer la led broche 4 (PIN4)
+		mov r3, #PORT45      					;; Allume portF broche 4 : 00010000
+		ldr r6, = GPIO_PORTF_BASE + (PORT45<<2)  ;; @data Register = @base + (mask<<2) ==> LED1
+		str r3, [r6] 
+; pour eteindre LED
+
+ 		mov r2, #0x000
+		
 		NOP
 		NOP
 		NOP
@@ -184,6 +200,7 @@ delay_init
 		NOP
 		NOP
 		NOP
+		
 
         ; Initialisation de l'état (0 = gauche, 1 = droite)
         MOV     R8, #0
@@ -207,7 +224,7 @@ loop
         BEQ     stop_robot            ; Si oui, arrêter le robot
 
         ; Réduire la durée actuelle
-        SUBS    R1, R1, #0
+        SUBS    R1, R1, #1
         STR     R1, [R0]
 
         ldr r7, = GPIO_PORTE_BASE + (PORT0 << 2)
@@ -289,11 +306,12 @@ increment_duration
 
 stop_robot
         ; Arrêter le robot
-        MOV     R3, #0
+        mov r2, #0x000       					;; pour eteindre LED
         LDR     R6, =GPIO_PORTF_BASE + GPIO_O_DIR
-        STR     R3, [R6]             ; Éteindre les LEDs
+        STR     R2, [R6]             ; Éteindre les LEDs
         BL      MOTEUR_DROIT_OFF
         BL      MOTEUR_GAUCHE_OFF
+
 
 stop_loop
         B       stop_loop
@@ -302,109 +320,64 @@ handle_bumper
         ; Reculer brièvement
         BL      MOTEUR_DROIT_ARRIERE
         BL      MOTEUR_GAUCHE_ARRIERE
-
-        ; Charger la valeur de `DUREE` en fonction du compteur SWITCH_COUNT_TWO
-        LDR     R0, =SWITCH_COUNT_TWO
-        LDR     R1, [R0]                   ; Charger la valeur actuelle du compteur
-
-        CMP     R1, #0                     ; Si le compteur vaut 0
-        BEQ     use_duree_one
-        CMP     R1, #1                     ; Si le compteur vaut 1
-        BEQ     use_duree_two
-        CMP     R1, #2                     ; Si le compteur vaut 2
-        BEQ     use_duree_three
-
-        ; Réinitialiser le compteur à 0 si la valeur dépasse 2
-        MOV     R1, #0
-        STR     R1, [R0]
-        B       use_duree_one              ; Revenir à la première configuration
-
-use_duree_one
-        LDR     R0, =DUREE_ONE
-        LDR     R2, =DUREE_90_ONE
-        LDR     R3, =DUREE_AVANCE_COURTE_ONE
-        B       apply_duree
-
-use_duree_two
-        LDR     R0, =DUREE_TWO
-        LDR     R2, =DUREE_90_TWO
-        LDR     R3, =DUREE_AVANCE_COURTE_TWO
-        B       apply_duree
-
-use_duree_three
-        LDR     R0, =DUREE_TRHEE
-        LDR     R2, =DUREE_90_TRHEE
-        LDR     R3, =DUREE_AVANCE_COURTE_TRHEE
-        B       apply_duree
-
-apply_duree
-        ; Temporisation pour reculer
+        ldr r0, = DUREE             ; Temporisation pour reculer
 delay1
-        SUBS    R0, R0, #1
-        BNE     delay1
-
+        subs r0, r0, #1
+        bne delay1
         ; Décider la direction de la rotation pour 180° (zigzag)
-        CMP     R8, #0
-        BEQ     turn_180_left
-
+        cmp r8, #0
+        beq turn_180_left
 turn_180_right
         ; Rotation 90° à droite
         BL      MOTEUR_DROIT_ARRIERE
         BL      MOTEUR_GAUCHE_AVANT
-        MOV     R0, R2                   ; Charger DUREE_90
+        ldr r0, = DUREE_90
 delay2
-        SUBS    R0, R0, #1
-        BNE     delay2
-
+        subs r0, r0, #1
+        bne delay2
         ; Avancer légèrement
         BL      MOTEUR_DROIT_AVANT
         BL      MOTEUR_GAUCHE_AVANT
-        MOV     R0, R3                   ; Charger DUREE_AVANCE_COURTE
+        ldr r0, = DUREE_AVANCE_COURTE
 delay3
-        SUBS    R0, R0, #1
-        BNE     delay3
-
+        subs r0, r0, #1
+        bne delay3
         ; Rotation 90° à droite (complète 180°)
         BL      MOTEUR_DROIT_ARRIERE
         BL      MOTEUR_GAUCHE_AVANT
-        MOV     R0, R2                   ; Charger DUREE_90
+        ldr r0, = DUREE_90
 delay4
-        SUBS    R0, R0, #1
-        BNE     delay4
-
+        subs r0, r0, #1
+        bne delay4
         ; Mettre à jour l'état
-        MOV     R8, #0
-        B       continue
-
+        mov r8, #0
+        b       continue
 turn_180_left
         ; Rotation 90° à gauche
         BL      MOTEUR_DROIT_AVANT
         BL      MOTEUR_GAUCHE_ARRIERE
-        MOV     R0, R2                   ; Charger DUREE_90
+        ldr r0, = DUREE_90
 delay5
-        SUBS    R0, R0, #1
-        BNE     delay5
-
+        subs r0, r0, #1
+        bne delay5
         ; Avancer légèrement
         BL      MOTEUR_DROIT_AVANT
         BL      MOTEUR_GAUCHE_AVANT
-        MOV     R0, R3                   ; Charger DUREE_AVANCE_COURTE
+        ldr r0, = DUREE_AVANCE_COURTE
 delay6
-        SUBS    R0, R0, #1
-        BNE     delay6
-
+        subs r0, r0, #1
+        bne delay6
         ; Rotation 90° à gauche (complète 180°)
         BL      MOTEUR_DROIT_AVANT
         BL      MOTEUR_GAUCHE_ARRIERE
-        MOV     R0, R2                   ; Charger DUREE_90
+        ldr r0, = DUREE_90
 delay7
-        SUBS    R0, R0, #1
-        BNE     delay7
-
+        subs r0, r0, #1
+        bne delay7
         ; Mettre à jour l'état
-        MOV     R8, #1
+        mov r8, #1
 continue
         ; Reprendre la boucle
-        B       loop
+        b       loop
         nop
         END
